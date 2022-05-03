@@ -3,7 +3,7 @@ import cv2
 import numpy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-
+from std_msgs.msg import Float64
 
 class image_converter:
 
