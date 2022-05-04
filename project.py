@@ -2,32 +2,47 @@ import rospy
 import cv2
 import cv_bridge
 import numpy
+from math import radians
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 
 
-blueflag = False
 
-class Solver:
+
+class Controller:
 
     def __init__(self):
+
+        rospy.init_node('Controller', anonymous=True)
+
+        self.r = rospy.Rate(5)
+
         self.bridge = cv_bridge.CvBridge()
 
-        self.image_sub = rospy.Subscriber("/camera/rgb/image_raw",
-                                          Image, self.image_callback)
-        self.cmd_vel_pub = rospy.Publisher('/mobile_base/commands/velocity', Twist,
-                                           queue_size=1)
+        self.image_sub = rospy.Subscriber("/camera/rgb/image_raw",Image, self.image_callback)
+        self.cmd_vel_pub = rospy.Publisher('/mobile_base/commands/velocity', Twist,queue_size=1)
         self.scan_sub = rospy.Subscriber('/scan', LaserScan, self.laser_callback)
 
-    def laser_callback(self, data):
-        if data.ranges[320] < 1.0:# the laser has a range of 640 points from left to right
-            # it takes the middle point and checks if its 1m behind
-            if blueflag == True:
-                t = Twist()
-                t.angular.z = 1.0
-                self.cmd_vel_pub.publish(t)
 
+        self.blueFlag = False
+        self.redFlag = False
+        self.greenFlag = False
+
+        self.laserData = LaserScan()
+        self.cmd = Twist()
+
+    def laser_callback(self, data):
+        self.laserData =data
+
+    def laser_midpoint(self):
+        return self.laserData.ranges[320]
+
+    def laser_right(self):
+        return self.laserData.ranges[0]
+
+    def laser_left(self):
+        return self.laserData.ranges[619]
 
     def image_callback(self, msg):
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -56,32 +71,20 @@ class Solver:
         #mask[0:search_top, 0:w] = 0
         #mask[search_bot:h, 0:w] = 0
         Mblue = cv2.moments(mask_blue)
-        #if M['m00'] > 0:
-            #cx = int(M['m10']/M['m00'])
-            #cy = int(M['m01']/M['m00'])
-            #cv2.circle(image, (cx, cy), 20, (0, 0, 255), -1)
-            #err = cx - w/2
-            #self.twist.linear.x = 0.2
-            #self.twist.angular.z = -float(err) / 100
-            #print (self.twist.angular.z)
-
-            #self.cmd_vel_pub.publish(self.twist)
-        #print("hi mark")
-
-        #print(cv2.mean(hsv[:, :, 0], mask = satthresh)[0])
-        #print(cv2.mean(hsv[:, :, 1], mask = satthresh)[0])
+        Mgreen = cv2.moments(mask_green)
+        Mred = cv2.moments(mask_red)
 
         if Mblue['m00'] > 0:
             print("blue detected")
-            blueflag = True
+            self.blueFlag = True
         else:
-            blueflag = False
+            self.blueFlag = False
             print("no blue")
 
 
-        cv2.imshow("blue", mask_blue)
-        cv2.imshow("red", mask_red)
-        cv2.imshow("yellow", mask_green)
+        #cv2.imshow("blue", mask_blue)
+        #cv2.imshow("red", mask_red)
+        #cv2.imshow("yellow", mask_green)
         cv2.imshow("hsv", hsv)
 
         cv2.waitKey(3)
@@ -89,8 +92,8 @@ class Solver:
 
 
 #cv2.startWindowThread()
-rospy.init_node('solver')
-solver = Solver()
+
+solver = Controller()
 rospy.spin()
 
 cv2.destroyAllWindows()
