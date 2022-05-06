@@ -24,12 +24,13 @@ class Controller:
         self.image_sub = rospy.Subscriber("/camera/rgb/image_raw",Image, self.image_callback)
         self.cmd_vel_pub = rospy.Publisher('/mobile_base/commands/velocity', Twist,queue_size=1)
         self.scan_sub = rospy.Subscriber('/scan', LaserScan, self.laser_callback)
-
+        
+        self.move_cmd = Twist()
 
         self.blueFlag = False
         self.redFlag = False
         self.greenFlag = False
-        self.move_cmd = Twist()
+
         self.turnflag = False
         self.stopflag = False
         self.initalturnflag = False
@@ -37,41 +38,42 @@ class Controller:
 
 
     def laser_callback(self, laser_data):
+
         if self.initalturnflag !=True:
             self.initial_turn()
 
-
-        if laser_data.ranges[320] > 0.8 and self.stopflag != True and self.blueFlag != True:
-
-            self.move_forwards()
-
-
-        elif laser_data.ranges[320] < 0.8:
-            print("im here 47")
-            self.stopflag = True
+        while numpy.nansum(laser_data.ranges[290:350])/len(laser_data.ranges[290:350]) > 1:
+            if self.blueFlag !=True and self.greenFlag !=True and self.redFlag != True:
+                self.move_forwards()
+                break
+            elif self.blueFlag == True:
+                self.move_towardsColour()
+                break
+            elif self.greenFlag == True:
+                hi =32
+                break
+            elif self.redFlag == True:
+                fu = 32
+                break
+        while numpy.nansum(laser_data.ranges[290:350])/len(laser_data.ranges[290:350]) < 0.7:
             self.stop_robot()
-            rightlaser = laser_data.ranges[0:320]
-            leftlaser = laser_data.ranges[320:639]
+            if (numpy.nansum(laser_data.ranges[0:180])/len(laser_data.ranges[0:180])) > laser_data.ranges[320]:
+                print("Turning left")
+                self.turn_left()
+                self.r.sleep()
+                break
+            elif (numpy.nansum(laser_data.ranges[450:639])/len(laser_data.ranges[450:639])) > laser_data.ranges[320]:
+                print("Turning right")
+                self.turn_right()
+                self.r.sleep()
+                break
 
-            ravg = numpy.nansum(rightlaser) / len(rightlaser)
-            lavg = numpy.nansum(leftlaser) / len(leftlaser)
-            print(ravg)
-            print(lavg)
-            print(self.turnflag)
 
-            if self.turnflag !=True:
-                if ravg > lavg:
-                    self.turn_right()
-                    self.turnflag =False
-
-                elif lavg > ravg:
-                    self.turn_left()
-                    self.turnflag =False
-        else:
-            self.turnflag =False
-            self.stopflag = False
-            self.move_forwards()
-            print("im here 77")
+        #else:
+            #self.turnflag =False
+            #self.stopflag = False
+            #self.move_forwards()
+            #print("im here 77")
             
 
 
@@ -100,15 +102,17 @@ class Controller:
         self.move_cmd.linear.x = 0.2
         self.move_cmd.angular.z = 0
         self.cmd_vel_pub.publish(self.move_cmd)
+        self.r.sleep()
 
-    def stop_robot(self):
-        self.move_cmd.linear.x = 0
-        self.move_cmd.angular.z = 0
+
+    def move_towardsColour(self):
+        self.move_cmd.linear.x = 0.2
+        self.move_cmd.angular.z = -float(self.err)/200
         self.cmd_vel_pub.publish(self.move_cmd)
+        self.r.sleep()
 
-    def turn_left(self):
-        self.turnflag =True
-        target_ang = radians(45)
+    def move_away(self):
+        target_ang = radians(180)
         current_ang = 0
         t0 = rospy.Time.now().to_sec()
         while current_ang < target_ang:
@@ -116,24 +120,29 @@ class Controller:
             t1 = rospy.Time.now().to_sec()
             self.cmd_vel_pub.publish(self.move_cmd)
             current_ang = radians(10) *(t1-t0)
-            #print(current_ang)
-        
+            print(current_ang)
+            self.move_cmd.angular.z = 0
+            self.cmd_vel_pub.publish(self.move_cmd)
+
+    def stop_robot(self):
+        self.move_cmd.linear.x = 0
         self.move_cmd.angular.z = 0
         self.cmd_vel_pub.publish(self.move_cmd)
+        self.r.sleep()
+
+
+    def turn_left(self):
+        self.move_cmd.angular.z = -0.3
+        self.cmd_vel_pub.publish(self.move_cmd)
+        self.r.sleep()
+        self.stop_robot()
 
     def turn_right(self):
-        self.turnflag =True
-        target_ang = radians(-45)
-        current_ang = 0
-        t0 = rospy.Time.now().to_sec()
-        while current_ang > target_ang:
-            self.move_cmd.angular.z = radians(-10)
-            t1 = rospy.Time.now().to_sec()
-            self.cmd_vel_pub.publish(self.move_cmd)
-            current_ang = radians(-10) *(t1-t0)
-            #print(current_ang)
-        self.move_cmd.angular.z = 0
+        self.move_cmd.angular.z = 0.3
         self.cmd_vel_pub.publish(self.move_cmd)
+        self.r.sleep()
+        self.stop_robot()
+
 
     def image_callback(self, msg):
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -167,12 +176,14 @@ class Controller:
 
         if Mred['m00'] > 0:
             cx = int(Mred['m10']/Mred['m00'])
+            self.err = cx - w/2
             self.redFlag = True
         else:
             self.redFlag = False
         
         if Mgreen['m00'] > 0:
             cx = int(Mgreen['m10']/Mgreen['m00'])
+            self.err = cx - w/2
             self.greenFlag = True
         else:
             self.greenFlag = False
