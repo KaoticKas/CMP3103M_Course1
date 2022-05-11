@@ -31,117 +31,138 @@ class Controller:
         self.redFlag = False
         self.greenFlag = False
 
-        self.turnflag = False
-        self.stopflag = False
-        self.initalturnflag = False
+        self.isTurning = False
+
+        self.initalturn = False
+
         self.err = None
+        self.movingfromred = False
+
+        self.laser_zoner = None
+        self.laser_zonel = None
+        self.laser_mid = None
+        self.laser_zoner = None
 
 
     def laser_callback(self, laser_data):
+        #print "hi we here again"
 
-        if self.initalturnflag !=True:
+        lsr_right = (numpy.nansum(laser_data.ranges[0:80])/len(laser_data.ranges[0:80]))
+        lsr_left = (numpy.nansum(laser_data.ranges[560:639])/len(laser_data.ranges[560:639]))
+        lz = (numpy.nansum(laser_data.ranges[0:280])/len(laser_data.ranges[0:280]))
+        rz = (numpy.nansum(laser_data.ranges[400:639])/len(laser_data.ranges[400:639]))
+        lsr_mid = (numpy.nansum(laser_data.ranges[290:350])/len(laser_data.ranges[290:350]))
+
+        if self.initalturn !=True:
             self.initial_turn()
-
-        while numpy.nansum(laser_data.ranges[290:350])/len(laser_data.ranges[290:350]) > 1:
-            if self.blueFlag !=True and self.greenFlag !=True and self.redFlag != True:
-                self.move_forwards()
-                break
-            elif self.blueFlag == True:
-                self.move_towardsColour()
-                break
-            elif self.greenFlag == True:
-                hi =32
-                break
-            elif self.redFlag == True:
-                fu = 32
-                break
-        while numpy.nansum(laser_data.ranges[290:350])/len(laser_data.ranges[290:350]) < 0.7:
-            self.stop_robot()
-            if (numpy.nansum(laser_data.ranges[0:180])/len(laser_data.ranges[0:180])) > laser_data.ranges[320]:
-                print("Turning left")
-                self.turn_left()
-                self.r.sleep()
-                break
-            elif (numpy.nansum(laser_data.ranges[450:639])/len(laser_data.ranges[450:639])) > laser_data.ranges[320]:
-                print("Turning right")
+        if (lz > 0.7 and lsr_mid > 0.7 and rz > 0.7) and (self.blueFlag !=False or self.greenFlag !=False) and self.redFlag !=True:
+            self.move_towardsColour()
+        elif (lz >0.7 and lsr_mid > 0.7 and rz > 0.7) and self.redFlag != True:
+            self.move_forwards()
+            print ("movin forwards")
+        else:
+            if self.redFlag == True:
+                self.move_away()
+            elif (numpy.nansum(laser_data.ranges[0:80])/len(laser_data.ranges[0:80])) > (numpy.nansum(laser_data.ranges[559:639])/len(laser_data.ranges[559:639]))  and self.isTurning != True:
+                self.stop_robot()
                 self.turn_right()
-                self.r.sleep()
-                break
+                print ("We turning right")
+            elif (numpy.nansum(laser_data.ranges[559:639])/len(laser_data.ranges[559:639]))> (numpy.nansum(laser_data.ranges[0:80])/len(laser_data.ranges[0:80])) and self.isTurning !=True:
+                self.stop_robot()
+                self.turn_left()
+                print ("We turning left")
 
-
-        #else:
-            #self.turnflag =False
-            #self.stopflag = False
-            #self.move_forwards()
-            #print("im here 77")
-            
+            else:
+                #maybe add a while loop to turn until an angle is reached, idk
+                self.stop_robot()
+                self.turn_rightH()
+                print ("just why")
+        self.isTurning = True
 
 
     def initial_turn(self):
         target_ang = radians(360)
         current_ang = 0
-        if self.initalturnflag != True:
+        if self.initalturn != True:
 
             t0 = rospy.Time.now().to_sec()
             while current_ang < target_ang:
-                self.move_cmd.angular.z = radians(10)
+                self.move_cmd.angular.z = radians(20)
                 t1 = rospy.Time.now().to_sec()
                 self.cmd_vel_pub.publish(self.move_cmd)
                 current_ang = radians(10) *(t1-t0)
-                print(current_ang)
                 if self.blueFlag == True:
                     print ("bluefound")
-                    self.initalturnflag = True
+                    self.initalturn = True
                     break
             self.move_cmd.angular.z = 0
             self.cmd_vel_pub.publish(self.move_cmd)
         if current_ang >= target_ang:
-            self.initalturnflag = True
+            self.initalturn = True
 
     def move_forwards(self):
+
         self.move_cmd.linear.x = 0.2
         self.move_cmd.angular.z = 0
         self.cmd_vel_pub.publish(self.move_cmd)
-        self.r.sleep()
+        #self.r.sleep()
+        print ("you are at road 94")
 
 
     def move_towardsColour(self):
         self.move_cmd.linear.x = 0.2
         self.move_cmd.angular.z = -float(self.err)/200
+        #self.r.sleep()
         self.cmd_vel_pub.publish(self.move_cmd)
-        self.r.sleep()
 
     def move_away(self):
+        self.movingfromred = True
         target_ang = radians(180)
         current_ang = 0
+        print("red spotted")
         t0 = rospy.Time.now().to_sec()
         while current_ang < target_ang:
             self.move_cmd.angular.z = radians(10)
             t1 = rospy.Time.now().to_sec()
             self.cmd_vel_pub.publish(self.move_cmd)
             current_ang = radians(10) *(t1-t0)
-            print(current_ang)
             self.move_cmd.angular.z = 0
             self.cmd_vel_pub.publish(self.move_cmd)
+        self.movingfromred = True 
+
 
     def stop_robot(self):
+        "you are at road 118"
         self.move_cmd.linear.x = 0
         self.move_cmd.angular.z = 0
-        self.cmd_vel_pub.publish(self.move_cmd)
-        self.r.sleep()
+        #self.r.sleep()
 
 
     def turn_left(self):
-        self.move_cmd.angular.z = -0.3
+        self.isTurning = True
+        self.move_cmd.angular.z = -0.5
+        print ("you are at road 125")
         self.cmd_vel_pub.publish(self.move_cmd)
         self.r.sleep()
-        self.stop_robot()
+
 
     def turn_right(self):
-        self.move_cmd.angular.z = 0.3
+        self.isTurning = True
+        self.move_cmd.angular.z = 0.5
+        print ("you are at road 132")
         self.cmd_vel_pub.publish(self.move_cmd)
         self.r.sleep()
-        self.stop_robot()
+
+
+    
+    def turn_rightH(self):
+        self.isTurning = True
+        for x in range(0,10):
+            self.move_cmd.angular.z = radians(35)
+            print ("you are at road 999")
+            self.cmd_vel_pub.publish(self.move_cmd)
+        self.r.sleep()
+        self.isTurning = False
 
 
     def image_callback(self, msg):
@@ -192,14 +213,15 @@ class Controller:
 
 
         #cv2.imshow("blue", mask_blue)
-        #cv2.imshow("red", mask_red)
+        cv2.imshow("red", mask_red)
         #cv2.imshow("yellow", mask_green)
         #cv2.imshow("hsv", hsv)
         cv2.waitKey(3)
 
+    def run(self):
+        rospy.spin()
 #cv2.startWindowThread()
 
 solver = Controller()
-rospy.spin()
-
+solver.run()
 cv2.destroyAllWindows()
