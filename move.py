@@ -64,6 +64,7 @@ class Controller:
                 self.isTurning = False
                 #this runs if no colour is spotted.
             elif self.redFlag == True:
+                self.movingAway =True
                 self.move_away()
                 #executes a function to move away if red is spotted.
             else:
@@ -149,16 +150,21 @@ class Controller:
         #initiates angle variables and sets the moving away to true
         print("red spotted")
         t0 = rospy.Time.now().to_sec()
-        while self.movingAway ==True:
-            while current_ang < target_ang:
-                self.move_cmd.angular.z = radians(10)
-                t1 = rospy.Time.now().to_sec()
-                self.cmd_vel_pub.publish(self.move_cmd)
-                current_ang = radians(10) *(t1-t0)
-                self.move_cmd.angular.z = 0
-                self.cmd_vel_pub.publish(self.move_cmd)
-            if current_ang >= target_ang:
+        while current_ang < target_ang:
+            self.move_cmd.angular.z = radians(10)
+            t1 = rospy.Time.now().to_sec()
+            self.cmd_vel_pub.publish(self.move_cmd)
+            current_ang = radians(10) *(t1-t0)
+            self.move_cmd.angular.z = 0
+            self.cmd_vel_pub.publish(self.move_cmd)
+            if self.redFlag !=True:
                 self.movingAway = False
+                break
+
+        if current_ang >= target_ang:
+            self.movingAway = False
+
+
     #function that rotates the robot away from the red to avoid it.
     def stop_robot(self):
         "you are at road 118"
